@@ -1,0 +1,359 @@
+from pathlib import Path
+import zipfile
+
+root = Path("/mnt/data/personal-os-starter")
+page = root / "app/page.tsx"
+css = root / "app/globals.css"
+
+page.write_text(r''' "use client";
+
+import { useMemo, useState } from "react";
+import { ArrowUpRight, CircleDollarSign, Clock3, Link2, Plus, StickyNote, WalletCards, X } from "lucide-react";
+
+type LaterItem = {
+  id: number;
+  type: "url" | "note";
+  title: string;
+  value: string;
+  savedAt: string;
+};
+
+export default function Home() {
+  const [balance, setBalance] = useState("");
+  const [keep, setKeep] = useState("");
+  const [spending, setSpending] = useState("");
+  const [saving, setSaving] = useState("");
+  const [totalSaving, setTotalSaving] = useState("");
+
+  const [laterItems, setLaterItems] = useState<LaterItem[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [showForm, setShowForm] = useState<"url" | "note" | null>(null);
+  const [laterTitle, setLaterTitle] = useState("");
+  const [laterValue, setLaterValue] = useState("");
+
+  const allowed = useMemo(() => {
+    const b = Number(balance) || 0;
+    const k = Number(keep) || 0;
+    return Math.max(0, b - k);
+  }, [balance, keep]);
+
+  const remaining = Math.max(0, allowed - (Number(spending) || 0));
+  const usageRate = allowed > 0 ? Math.min(100, ((Number(spending) || 0) / allowed) * 100) : 0;
+
+  function addLater() {
+    if (!laterValue.trim()) return;
+
+    const now = new Date();
+    const savedAt = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;
+
+    setLaterItems(items => [
+      ...items,
+      {
+        id: Date.now(),
+        type: showForm!,
+        title: laterTitle.trim() || (showForm === "url" ? "LINK" : "NOTE"),
+        value: laterValue.trim(),
+        savedAt,
+      },
+    ]);
+
+    setLaterTitle("");
+    setLaterValue("");
+    setShowForm(null);
+    setShowAdd(false);
+  }
+
+  function removeLater(id: number) {
+    setLaterItems(items => items.filter(item => item.id !== id));
+  }
+
+  return (
+    <main className="shell">
+      <header className="topbar">
+        <div className="brand"><span className="brand-mark" /><span>PERSONAL OS</span></div>
+        <span className="status"><span className="status-dot" /> ONLINE</span>
+      </header>
+
+      <div className="home-label"><span>HOME</span><span className="home-line" /></div>
+
+      <section className="section todo-section">
+        <div className="section-head">
+          <div><p className="eyebrow">01 / TASK SYSTEM</p><h1>TODO</h1></div>
+          <button className="icon-button" aria-label="add todo"><Plus size={20} /></button>
+        </div>
+        <div className="todo-empty">
+          <div className="timeline"><span className="timeline-node" /><span className="timeline-line" /><span className="timeline-node muted" /></div>
+          <div className="empty-copy">
+            <span className="empty-icon"><Clock3 size={18} /></span>
+            <div><strong>NO ACTIVE TASKS</strong><p>Tasks will appear here as a timeline.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section money-section">
+        <div className="section-head">
+          <div><p className="eyebrow">02 / MONEY SYSTEM</p><h1>MONEY</h1></div>
+          <button className="icon-button" aria-label="money settings"><WalletCards size={20} /></button>
+        </div>
+
+        <div className="money-grid">
+          <div className="money-main">
+            <p className="metric-label">あと使っていい額</p>
+            <div className="big-number">¥{remaining.toLocaleString()}</div>
+            <div className="donut-wrap">
+              <div className="half-donut" style={{ "--usage": `${usageRate}%` } as React.CSSProperties}>
+                <div className="half-donut-inner" />
+              </div>
+              <div className="donut-legend">
+                <span><i className="dot green" /> REMAIN {Math.round(100 - usageRate)}%</span>
+                <span><i className="dot red" /> USED {Math.round(usageRate)}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="money-side">
+            <label className="mini-metric"><span className="metric-label">所持額</span><input inputMode="numeric" value={balance} onChange={e => setBalance(e.target.value)} placeholder="¥—" /></label>
+            <label className="mini-metric"><span className="metric-label">残しておく額</span><input inputMode="numeric" value={keep} onChange={e => setKeep(e.target.value)} placeholder="¥—" /></label>
+            <label className="mini-metric"><span className="metric-label">使用額</span><input inputMode="numeric" value={spending} onChange={e => setSpending(e.target.value)} placeholder="¥—" /></label>
+            <label className="mini-metric savings"><span className="metric-label">節約額</span><input inputMode="numeric" value={saving} onChange={e => { setSaving(e.target.value); if (e.target.value) setTotalSaving(e.target.value); }} placeholder="¥—" /><small>累計 ¥{Number(totalSaving || 0).toLocaleString()}</small></label>
+          </div>
+        </div>
+      </section>
+
+      <section className="section later-section">
+        <div className="section-head">
+          <div><p className="eyebrow">03 / MEMORY SYSTEM</p><h1>LATER</h1></div>
+        </div>
+
+        <div className="later-grid">
+          <button className="later-card add-card" onClick={() => setShowAdd(true)}>
+            <Plus size={28} strokeWidth={1.5} /><span>ADD</span>
+          </button>
+
+          {laterItems.map(item => (
+            <article className="later-card saved-card" key={item.id}>
+              <div className="saved-top">
+                <span className="saved-icon">{item.type === "url" ? <Link2 size={19} /> : <StickyNote size={19} />}</span>
+                <button className="remove-button" onClick={() => removeLater(item.id)} aria-label="delete"><X size={15} /></button>
+              </div>
+              <strong>{item.title}</strong>
+              {item.type === "url" ? (
+                <a href={item.value} target="_blank" rel="noreferrer">{item.value}<ArrowUpRight size={14} /></a>
+              ) : (
+                <p>{item.value}</p>
+              )}
+              <small>{item.savedAt}</small>
+            </article>
+          ))}
+        </div>
+
+        {laterItems.length === 0 && (
+          <div className="later-empty">NO SAVED ITEMS</div>
+        )}
+      </section>
+
+      <footer className="footer"><span>PERSONAL OS / v0.3</span><span>LOCAL UI • CLOUD READY</span></footer>
+
+      {showAdd && (
+        <div className="modal-backdrop" onClick={() => setShowAdd(false)}>
+          <div className="add-menu" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><strong>ADD TO LATER</strong><button onClick={() => setShowAdd(false)}><X size={18} /></button></div>
+            <button onClick={() => { setShowAdd(false); setShowForm("url"); }}><Link2 size={19} /><span>URL</span><small>X / Web / anything</small></button>
+            <button onClick={() => { setShowAdd(false); setShowForm("note"); }}><StickyNote size={19} /><span>NOTE</span><small>Idea / memo</small></button>
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="modal-backdrop" onClick={() => setShowForm(null)}>
+          <div className="form-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-head"><strong>{showForm === "url" ? "SAVE URL" : "SAVE NOTE"}</strong><button onClick={() => setShowForm(null)}><X size={18} /></button></div>
+            <input value={laterTitle} onChange={e => setLaterTitle(e.target.value)} placeholder="TITLE (optional)" autoFocus />
+            <textarea value={laterValue} onChange={e => setLaterValue(e.target.value)} placeholder={showForm === "url" ? "https://..." : "Write something for later..."} />
+            <button className="save-button" onClick={addLater}>SAVE</button>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+'''.lstrip(), encoding="utf-8")
+
+text = css.read_text(encoding="utf-8")
+text += r'''
+
+.later-empty {
+  margin-top: 14px;
+  color: #4f5b61;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: .16em;
+}
+
+.saved-card {
+  position: relative;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.saved-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.saved-icon {
+  color: var(--green);
+}
+
+.remove-button,
+.modal-head button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.saved-card strong {
+  font-size: 13px;
+}
+
+.saved-card a,
+.saved-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.saved-card a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+}
+
+.saved-card small {
+  margin-top: auto;
+  color: #4f5b61;
+  font-size: 8px;
+  letter-spacing: .1em;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, .62);
+  backdrop-filter: blur(8px);
+}
+
+.add-menu,
+.form-modal {
+  width: min(420px, 100%);
+  padding: 18px;
+  border: 1px solid #334047;
+  border-radius: 18px;
+  background: #11171b;
+  box-shadow: 0 24px 80px rgba(0,0,0,.45);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.modal-head strong {
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+
+.add-menu > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-menu > button:hover {
+  border-color: #526169;
+}
+
+.add-menu > button span {
+  font-size: 12px;
+}
+
+.add-menu > button small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.form-modal input,
+.form-modal textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  outline: 0;
+  background: #0b1013;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.form-modal textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.form-modal input:focus,
+.form-modal textarea:focus {
+  border-color: #526169;
+}
+
+.save-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--green);
+  color: #07100b;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .12em;
+  cursor: pointer;
+}
+'''
+css.write_text(text, encoding="utf-8")
+
+zip_path = Path("/mnt/data/personal-os-starter-v03.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in root.rglob("*"):
+        if p.is_file():
+            z.write(p, p.relative_to(root))
+
+print(zip_path)
